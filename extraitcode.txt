@@ -1,0 +1,233 @@
+  
+  procedure TFmaj.FormShow(Sender: TObject);
+	var individu,Pind,Nind,Datmaj,IndPers :string;
+     	i,id,posN,posP :Integer;
+	begin
+     	posN :=0;
+          posP :=0;
+     	Datmaj := DateToStr(Date);
+        
+        //avec un objey TFDQuery  je requete dans ma table mysql pour recuperé tous les individu : id, nom, prenom
+        
+   		ReqMaj.Active := False;
+        ReqMaj.Close;
+     	ReqMaj.SQL.Clear;
+     	ReqMaj.SQL.Text := 'SELECT idperson,nom,prenom FROM personnes';
+     	ReqMaj.Active := True;
+          ReqMaj.Open;
+          
+        //là je transforme en majuscule ce qui a été rentré en minuscule (petit pb avec islower et tcharacter qui semble "deprécié", mais n arrive pas à trouvé comment utiliser tcharhelper)
+          
+      	while not ReqMaj.Eof do
+          begin
+               id:=  ReqMaj.FieldByName('idperson').AsInteger;
+               Nind:=ReqMaj.FieldByName('nom').AsString;
+               Pind:=ReqMaj.FieldByName('prenom').AsString;
+               for i := 1 to Length(Nind) do
+                begin
+               	if IsLower(Nind[i]) then
+                     posN:=1;
+                end;
+                for i := 1 to Length(Pind) do
+                begin
+               	if TCharacter.IsLower (Pind[i])  then
+                     posP:=1;
+                end;
+                if (posP=1 )or (posN=1) then
+                	begin
+                     Nind :=Uppercase( Nind);
+                     Pind :=Uppercase( Pind);
+                      ReqMajPlus.Active := False;
+             		  ReqMajPlus.SQL.Clear;
+             	      ReqMajPlus.SQL.Text := 'UPDATE  personnes SET nom=:Nind,prenom=:Pind, datmaj=:Datmaj WHERE idperson=:id';
+                      ReqMajPlus.ParamByName('id').AsInteger := id;
+             		  ReqMajPlus.ParamByName('Nind').AsString := UpperCase(Nind);
+                      ReqMajPlus.ParamByName('Pind').AsString := UpperCase(Pind);
+                      ReqMajPlus.ParamByName('Datmaj').AsDate := StrToDate(Datmaj);
+             		  ReqMajPlus.Active := True;
+             		  ReqMajPlus.ExecSQL;
+                      ReqMajPlus.Active := False;
+                    end;
+               ReqMaj.Next;
+       	end;
+
+        ReqMaj.Active := False;
+        ReqMaj.Close;
+     	ReqMaj.SQL.Clear;
+     	ReqMaj.SQL.Text := 'SELECT idperson,nom,prenom FROM personnes ORDER BY nom,prenom';
+     	ReqMaj.Active := True;
+        ReqMaj.Open;
+        
+        //debut du remplissage de ma combobox (1ere ligne à vide par défaut)
+        
+        CbPerson.Text:='';
+      	CbPerson.Items.Clear();
+        CbPerson.ItemIndex := 0;
+        CbPerson.Items.Add('');
+
+          ReqMaj.first;
+      	while not ReqMaj.Eof do
+          begin
+
+               IndPers := ReqMaj.FieldByName('idperson').AsString;
+               CbPerson.ItemIndex  := ReqMaj.FieldByName('idperson').AsInteger;
+               
+               //là je concatene nom et prenom pour l affichage dans ma combo
+               
+               individu :=  ReqMaj.FieldByName('nom').AsString + ' ' + ReqMaj.FieldByName('prenom').AsString;
+               
+               //là plutot que d utiliser item.Add j utilise Additem afin de pouvoir exploité l index de la table en tant que Tobject (non visible à l affichage)
+               
+               CbPerson.AddItem(individu,TObject(StrtoInt(IndPers)));
+               ReqMaj.Next;
+       	end;
+          CbPerson.Text:='';
+     ReqMaj.Active := False;
+     ReqMaj.Close;
+     
+  //procedure où j utilise la selection des individus dans la combo (il peut y avoir des doublons et l affichage se fait dans l ordre alpha et non l ordre des index)
+     
+  procedure TFmaj.CbPersonChange(Sender: TObject);
+	var Individu :string;
+  		i,idIndi,IndPers: Integer;
+     begin
+          for i := 0 to Componentcount-1 do
+          	begin
+            		if Components[i] is TEdit  then
+                     begin
+                       TEdit(Components[i]).Text:='';
+                     end;
+               end;
+       for i := 0 to Componentcount-1 do
+          	begin
+            		if (Components[i] is TComboBox and (TComboBox(Components[i]).Name <> 'CbPerson')) then
+                     begin
+                       TComboBox(Components[i]).Text:='';
+                     end;
+               end;
+               
+            //je recupere nom et prenom de l individu selectionné   
+               
+          	Individu := CbPerson.Text;
+            
+            //je recupère l index de cette individu via items.objects(cbxx.itemindex)
+               
+            IndPers := Integer(CbPerson.Items.Objects[CbPerson.ItemIndex]);
+            
+            //je fait ma requete mysql pat tfdquery avec comme paramètre cet index et recupère tous les champs dont j ai besoin pour alimenter le tedit de mon ecran de restitution
+            
+      		ReqMaj.Active := False;
+     		ReqMaj.SQL.Clear;
+               ReqMaj.SQL.Add( 'SELECT idperson,nom,prenom,datnaiss,datdec,idper,idmer,datmaria,idepou,lieunaiss,lieudec,idnatnaiss,idnatdec,iddeptnaiss,iddeptdec,prenom2,prenom3,memo,datmaj FROM personnes where idperson=:IndPers') ;
+               ReqMaj.ParamByName('IndPers').AsInteger := IndPers;
+          	ReqMaj.Open;
+          	ReqMaj.Active := True;
+          if (ReqMaj.RecordCount =1) then
+           	begin
+
+                 if (DateTimeToStr(ReqMaj.FieldByName('datnaiss').AsDateTime)<>'30/12/1899') then
+                 	EdDNmaj.Text := DateTimeToStr( ReqMaj.FieldByName('datnaiss').AsDateTime)
+                 else
+                  	EdDNmaj.Text :='';
+                 if (DateTimeToStr(ReqMaj.FieldByName('datdec').AsDateTime)<>'30/12/1899') then
+                 	EdDDmaj.Text := DateTimeToStr( ReqMaj.FieldByName('datdec').AsDateTime)
+                  else
+                  	EdDDmaj.Text :='';
+                 if (DateTimeToStr(ReqMaj.FieldByName('datmaria').AsDateTime)<>'30/12/1899') then
+                 	EdDMmaj.Text := DateTimeToStr( ReqMaj.FieldByName('datmaria').AsDateTime)
+                 else
+                  	EdDMmaj.Text :='';
+                 	EdLDmaj.Text := ReqMaj.FieldByName('lieudec').AsString;
+                 	EdLNmaj.Text := ReqMaj.FieldByName('lieunaiss').AsString;
+                    ReqMajPlus.Active := False;
+                    ReqMajPlus.Close;
+                  	ReqMajPlus.SQL.Clear;
+                  	ReqMajPlus.SQL.Add( 'SELECT idperson,nom,prenom FROM personnes where idperson='+ (ReqMaj.FieldByName('idmer').AsString ) ) ;
+                  	ReqMajPlus.Open;
+                  	ReqMajPlus.Active := True;
+                  if (ReqMajPlus.RecordCount =1) then
+                    begin
+                 		EdMNmaj.Text := ReqMajPlus.FieldByName('nom').AsString;
+                 		EdMPmaj.Text := ReqMajPlus.FieldByName('prenom').AsString;
+                    end;
+                 	EdP2maj.Text := ReqMaj.FieldByName('prenom2').AsString;
+                 	EdP3maj.Text := ReqMaj.FieldByName('prenom3').AsString;
+                    MemMaj.Text:=  ReqMaj.FieldByName('memo').AsString;
+                    idIndi := ReqMaj.FieldByName('idperson').AsInteger;
+                    ReqMajPlus.Active := False;
+                    ReqMajPlus.Close;
+                 	ReqMajPlus.SQL.Clear;
+                  	ReqMajPlus.SQL.Add( 'SELECT idperson,nom,prenom FROM personnes where idperson='+ (ReqMaj.FieldByName('idper').AsString ) ) ;
+                  	ReqMajPlus.Open;
+                  	ReqMajPlus.Active := True;
+                  if (ReqMajPlus.RecordCount =1) then
+                    begin
+                 		EdPNmaj.Text := ReqMajPlus.FieldByName('nom').AsString;
+                 		EdPPmaj.Text := ReqMajPlus.FieldByName('prenom').AsString;
+                    end;
+                    ReqMajPlus.Active := False;
+                    ReqMajPlus.Close;
+                 	ReqMajPlus.SQL.Clear;
+                  	ReqMajPlus.SQL.Add( 'SELECT idperson,nom,prenom FROM personnes where idperson='+ (ReqMaj.FieldByName('idepou').AsString ) ) ;
+                  	ReqMajPlus.Open;
+                  	ReqMajPlus.Active := True;
+                  if (ReqMajPlus.RecordCount =1) then
+                    begin
+                 		EdNEpmaj.Text := ReqMajPlus.FieldByName('nom').AsString;
+                 		EdPEpmaj.Text := ReqMajPlus.FieldByName('prenom').AsString;
+                    end;
+                    ReqMajPlus.Active := False;
+                    ReqMajPlus.Close;
+                 	ReqMajPlus.SQL.Clear;
+                  	ReqMajPlus.SQL.Add( 'SELECT iddept,dept FROM departement where iddept='+ (ReqMaj.FieldByName('iddeptdec').AsString ) ) ;
+                  	ReqMajPlus.Open;
+                  	ReqMajPlus.Active := True;
+                  if (ReqMajPlus.RecordCount =1) then
+                  		CbDeptDmaj.ClearSelection;
+                         CbDeptDmaj.ItemIndex :=ReqMajPlus.FieldByName('iddept').AsInteger;
+                         CbDeptDmaj.Text:=ReqMajPlus.FieldByName('dept').AsString;
+                    ReqMajPlus.Active := False;
+                    ReqMajPlus.Close;
+                 	ReqMajPlus.SQL.Clear;
+                  	ReqMajPlus.SQL.Add( 'SELECT iddept,dept FROM departement where iddept='+ (ReqMaj.FieldByName('iddeptnaiss').AsString ) ) ;
+                  	ReqMajPlus.Open;
+                  	ReqMajPlus.Active := True;
+                  if (ReqMajPlus.RecordCount =1) then
+                  		CbDeptNmaj.ClearSelection;
+                         CbDeptNmaj.ItemIndex :=ReqMajPlus.FieldByName('iddept').AsInteger;
+                 		CbDeptNmaj.Text:=ReqMajPlus.FieldByName('dept').AsString;
+					ReqMajPlus.Active := False;
+                    	ReqMajPlus.Close;
+                         ReqMajPlus.SQL.Clear;
+                         ReqMajPlus.SQL.Add( 'SELECT idnation,nom FROM pays where idnation='+ (ReqMaj.FieldByName('idnatnaiss').AsString ) ) ;
+                         ReqMajPlus.Open;
+                         ReqMajPlus.Active := True;
+                  if (ReqMajPlus.RecordCount =1) then
+                  		CbPaysNmaj.ClearSelection;
+                         CbPaysNmaj.ItemIndex :=ReqMajPlus.FieldByName('idnation').AsInteger;
+                 		CbPaysNmaj.Text:=ReqMajPlus.FieldByName('nom').AsString;
+                         ReqMajPlus.Active := False;
+                    	ReqMajPlus.Close;
+                 		ReqMajPlus.SQL.Clear;
+                  		ReqMajPlus.SQL.Add( 'SELECT idnation,nom FROM pays where idnation='+ (ReqMaj.FieldByName('idnatdec').AsString ) ) ;
+                  		ReqMajPlus.Open;
+                  		ReqMajPlus.Active := True;
+                  if (ReqMajPlus.RecordCount =1) then
+                  		CbPaysDmaj.ClearSelection;
+                         CbPaysDmaj.ItemIndex :=ReqMajPlus.FieldByName('idnation').AsInteger;
+                 		CbPaysDmaj.Text:=ReqMajPlus.FieldByName('nom').AsString;
+                 if (DateTimeToStr(ReqMaj.FieldByName('datmaj').AsDateTime)<>'30/12/1899') then
+                  		LabDatmaj.Caption:= 'Mise à jour le : ' +  DateTimeToStr(ReqMaj.FieldByName('datmaj').AsDateTime)
+                  else
+                 		LabDatmaj.Caption:= 'Mise à jour le : 00/00/0000 ' ;
+                  ReqMajPlus.SQL.Clear;
+                  ReqMajPlus.SQL.Add( 'SELECT count(*) as nbe FROM personnes where idper=:idind or idmer=:idind ' ) ;
+                  ReqMajPlus.ParamByName('idind').AsInteger := idIndi;
+                  ReqMajPlus.Open;
+                  ReqMajPlus.Active := True;
+                  EdEnf.Text :=ReqMajPlus.FieldByName('nbe').AsString;
+       		end;
+
+
+      end;
+   
